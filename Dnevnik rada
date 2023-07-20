@@ -1,2 +1,9 @@
 18.07.2023.
 Zavrsen sandbox, u toku pravljenje dataset-a, zavrsena podesavanja okruzenja za bezbedan rad sa virusima
+
+19.07.2023.
+Zapoceto pravljenje statistike redosleda sistemskih poziva u zavisnosti od toga da li je fajl maliciozan ili ne.
+Osposobljen Docker za brzi sandbox u kontejneru koji pruza i pristup internetu.
+Zapoceta Nautilus ekstenzija koja dodaje opciju "Scan for malware" u meni desnog klika.
+Skinut dataset od oko 400 malvera koji rade na Linux-u na x86-64 procesorima.
+Uradjen strace za malvere u dataset-u.
