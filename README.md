@@ -37,6 +37,7 @@ Histogrami su veoma slicni, tako da ponovo nije bilo korisnih karakteristika za 
 
 # 23.07.2023.
 - Izlet do manastira Tronosa.
+- Nadjen dataset sa Windows virusima i skinut
 - Uvece ukljuceno skeniranje Windows virusa za prikupljanje log-ova
 
 # 24.07.2023.
