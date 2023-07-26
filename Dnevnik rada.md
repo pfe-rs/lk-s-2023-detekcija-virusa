@@ -61,6 +61,7 @@ deo je bio pojavljivanje std::string klase, cela biblioteka je prevedena u C da 
 - Gensim biblioteka koja se koristi nema podrsku za treniranje na GPU posto je valjda arhitektura Word2Vec mreze takva da se dosta operacija mora raditi
 sekvencijalno, pa velika paralelizacija na GPU procesoru ne bi pomogla mnogo. Iz tog razloga ne radim na Azure masini posto ona primarno ima dobar GPU procesor.
 Da ne bih trosio vreme na dalje podesavanje mog laptopa da ovo uradi, prebacujem se na Google Colab.
+- Ispisan ovaj dnevnik po secanju na prethodne dane izmedju danas i 19.07. Izvinjavam se na kasnjenju sa dnevnikom.
 
 # Napomena
 Ovaj dnevnik je pisan naknadno. Moguce je da neke stvari nisu dosledne ili nedostaju.
