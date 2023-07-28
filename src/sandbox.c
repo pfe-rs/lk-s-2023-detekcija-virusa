@@ -15,12 +15,12 @@
 #include <string.h>
 #include <stdarg.h>
 
-#define check(function)							\
-	if((function) < 0)						\
-	{								\
-		fprintf(stderr, #function);				\
-		fprintf(stderr, " Failed: %m\n%i\n", errno);		\
-		exit(1);						\
+#define check(function)								\
+	if((function) < 0)							\
+	{									\
+		fprintf(stderr, #function);					\
+		fprintf(stderr, " Failed: %m\nError code: %i\n", errno);	\
+		exit(1);							\
 	}
 #define read_end(pipefd)	(pipefd) ? pipefd[0] : -1
 #define write_end(pipefd)	(pipefd) ? pipefd[1] : -1
@@ -45,24 +45,24 @@ int createenv()
 	ssize_t ret;
 	int len, fd;
 
-	// Map uid
+	/* Map uid */
 	fd = open_check("/proc/self/uid_map", O_WRONLY);
 	asprintf(&map, "%u %u 1\n", euid, euid);
 	len = strlen(map);
 	ret = write(fd, map, len);
 	if (ret != len) {
 		fprintf(stderr, "Cannot write to /proc/self/uid_map!\n%m\nError code: %i", errno);
-		exit(1);
+		exit(2);
 	}
 	close(fd);
 	free(map);
 
-	// Map gid
+	/* Map gid */
 	fd = open_check("/proc/self/setgroups", O_WRONLY);
 	ret = write(fd, "deny", 4);
 	if (ret != 4) {
 		fprintf(stderr, "Cannot write to /proc/self/setgroups!\n%m\nError code: %i", errno);
-		exit(1);
+		exit(3);
 	}
 	close(fd);
 
@@ -72,14 +72,14 @@ int createenv()
 	ret = write(fd, map, len);
 	if (ret != len) {
 		fprintf(stderr, "Cannot write to /proc/self/gid_map!\n%m\nError code: %i", errno);
-		exit(1);
+		exit(4);
 	}
 	close(fd);
 	free(map);
 
-	// Mount filesystems
+	/* Mount filesystems */
 	check( mount(NULL, "/", NULL, MS_SLAVE | MS_REC, NULL) )
-	check( umount("/sys/fs/cgroup") )
+	//check( umount2("/sys/fs/cgroup", MNT_DETACH) )
 	check( mount("cgroup2", "/sys/fs/cgroup", "cgroup2", MS_NODEV | MS_NOSUID | MS_NOEXEC, NULL) )
 }
 
@@ -106,8 +106,8 @@ int execute(int argc, int stdin_pipe[], int stdout_pipe[], int stderr_pipe[], ..
 		free(path);
 		asprintf(&path, "/sbin/%s", argv[0]);
 		execve(path, argv, environment);
-		fprintf(stderr, "Cannot execute %s\n%i\n%m\n", argv[0], errno);
-		exit(1);
+		fprintf(stderr, "Cannot execute %s\nError code: %i\n%m\n", argv[0], errno);
+		exit(5);
 	}
 	close(write_end(stdout_pipe));
 	close(write_end(stderr_pipe));
@@ -131,7 +131,7 @@ void copy_virus(char *path)
 	char *viruspath;
 	int fd_src, fd_dst;
 
-	// Copy virus to the path inside Flatpak sandbox
+	/* Copy virus to the path inside Flatpak sandbox */
 	asprintf(&viruspath, "%s/.var/app/com.usebottles.bottles/data/bottles/bottles/Malware/drive_c/virus", getenv("HOME"));
 	fd_src = open_check(path, O_RDONLY);
 	fd_dst = open_check(viruspath, O_WRONLY | O_CREAT);
@@ -155,21 +155,27 @@ void drop_caps()
 
 void cgroup_kill()
 {
-	
+	int fdkill = open_check("/sys/fs/cgroup/cgroup.kill", O_WRONLY);
+	write(fdkill, "1\n", 2);
+	/* This should never be reached */
+	fprintf(stderr, "Error: Cannot kill cgroup!\n%m\nError code: %i", errno);
+	exit(6);
 }
 
-int main_cloned(char *path)
+int main_cloned(void *arg)
 {
-	char *buf, *out, *pre_out;
+	char *buf, *out, *pre_out, *viruspath = arg;
 	int pipefd[2];
 	struct sigaction sig = { 0 };
 
 	createenv();
 	drop_caps();
-	copy_virus(path);
+	copy_virus(viruspath);
 
-	// Start virus in Bottles
-	// Make signal handler that tells when process' immediate child terminated
+	/*
+	 * Start virus in Bottles
+	 * Make signal handler that tells when process' immediate child terminated
+	 */
 	sig.sa_sigaction = handler;
 	sig.sa_flags = SA_SIGINFO | SA_NOCLDSTOP | SA_NOCLDWAIT | SA_RESTART;
 	check( sigaction(SIGCHLD, &sig, NULL) )
@@ -180,7 +186,7 @@ int main_cloned(char *path)
 	buf = malloc(4097);
 	buf[4096] = '\0';
 	asprintf(&out, "");
-	read(read_end(pipefd), &buf, 4096);
+	read(read_end(pipefd), buf, 4096);
 	do {
 		pre_out = out;
 		asprintf(&out, "%s%s", pre_out, buf);
@@ -190,7 +196,7 @@ int main_cloned(char *path)
 		if (flatpak_terminated)
 			flatpak_terminated = 2;
 			
-	} while( read(read_end(pipefd), &buf, 4096));
+	} while( read(read_end(pipefd), buf, 4096));
 
 	printf("%s", out);
 	fflush(stdout);
@@ -200,45 +206,48 @@ int main_cloned(char *path)
 
 int main(int argc, char *argv[], char *envp[])
 {
+	int pid;
 	environment = envp;
 	euid = geteuid();
 	egid = getegid();
 	parse_args(argc, argv);
 	
-	// Create new process that will do the work in it's namespace
-	// 136 KiB = 34 pages
+	/*
+	 * Create new process that will do the work in it's namespace
+	 * 136 KiB = 34 pages
+	 */
 	if (!stack)
 		stack = mmap(NULL, 34*4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON | MAP_GROWSDOWN, -1, 0);
 	if (stack == MAP_FAILED) {
 		fprintf(stderr, "Cannot create stack space for the new process!\n%m\nError code: %i", errno);
-		exit(1);
+		exit(7);
 	}
 
-	int pid = clone(main_cloned, stack, CLONE_NEWCGROUP | CLONE_NEWNS | CLONE_NEWUSER | CLONE_VM, argv[1]);
+	pid = clone(main_cloned, stack, CLONE_NEWCGROUP | CLONE_NEWNS | CLONE_NEWUSER | CLONE_VM, argv[1]);
 	if (pid < 0) {
 		fprintf(stderr, "Cannot create new process!\n%m\nError code: %i", errno);
-		exit(2);
+		exit(8);
 	}
 	
-	// Wait for the child to terminate
+	/* Wait for the child to terminate */
 	siginfo_t status;
 	check( waitid(P_PID, pid, &status, WEXITED) )
 	if (status.si_code != CLD_KILLED)
 		exit_code = status.si_status;
-	print("%i\n", exit_code);
+	printf("%i\n", exit_code);
 }
 
-// Helper functions:
+/* Helper functions */
 
 void parse_args(int argc, char *argv[])
 {
 	if (argc != 2) {
 		fprintf(stderr, "Wrong arguments passed to the helper program!\n");
-		exit(2);
+		exit(9);
 	}
 	if (getenv("HOME") == NULL) {
 		fprintf(stderr, "Wrong environment passed to the helper program!\n$HOME variable missing\n");
-		exit(3);
+		exit(10);
 	}
 }
 
@@ -247,7 +256,7 @@ int open_check(const char *pathname, int flags)
 	int fd = open(pathname, flags, 0664);
 	if (fd < 0) {
 		fprintf(stderr, "open(%s) failed: %i\n%m", pathname, errno);
-		exit(4);
+		exit(11);
 	}
 
 	return fd;
@@ -258,7 +267,7 @@ off_t lseek_check(int fd, off_t offset, int whence)
 	off_t ret = lseek(fd, offset, whence);
 	if (ret < 0) {
 		fprintf(stderr, "lseek() failed: %i\n%m", errno);
-		exit(5);
+		exit(12);
 	}
 
 	return ret;
