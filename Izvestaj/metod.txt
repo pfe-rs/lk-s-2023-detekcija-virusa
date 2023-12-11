@@ -1,0 +1,19 @@
+# Aparatura i metoda
+Kao glavni izvor informacija za metod dinamičke analize, u ovom radu smo se opredelili za praćenje sistemskih poziva koje program napravi tokom izvršavanja (syscall log).
+Sistemski pozivi su funkcije koje pruža kernel operativnog sistema i jedini su način kako userspace program može interagovati sa ostatkom računara van svog memorijskog prostora. Sistemski pozivi se koriste za čitanje unosa sa ulaznih uređaja, ispisivanje na ekran, pristupanje mreži, upis/ispis/brisanje fajlova i mnoge druge funkcije, te kao takvi pružaju dobar uvid u to šta program pokušava da uradi.
+## Metod se sastoji iz četiri dela:
+1) Pravljenje sandbox-a i sakupljanje log-ova
+2) Parsiranje log-ova
+3) Vektorizacija log-ova
+4) Klasifikacija programa na osnovu log-a
+
+U prvom delu potrebno je napraviti okruženje u kom će se program izvršavati bezbedno. To okruženje mora biti odvojeno od ostatka računara, njegovih resursa i fajlova, a mora biti i efikasno i brzo za pokretanje, zbog čega smo u tu svrhu izabrali kontejnere. Kontejneri odvajaju programe koristeći funkcionalnosti kernel-a host sistema poput namespace-ova i kontrol grupa i raznih mehanizama za ograničavanje dozvola.
+Da bismo podržali i Windows i Linux izvršne fajlove, koristili smo dva odvojena metoda za pravljenje sandbox-a:
+1: Za Linux fajlove smo koristili Docker kontejner sa strace alatom unutar sebe koji snima log-ove unutar kontejnera koji bivaju izvezeni kada se kontejner ugasi. 
+2: Za Windows fajlove smo u osnovi koristili WINE projekat. WINE je softver koji omogućava pokretanje Windows programa na Linux-u simuliranjem Windows okruženja. Kao dodatni nivo izolacije, sam WINE je upakovan u Flatpak kontejner pružen projektom Bottles. Log-ovi su sakupljani uz pomoć WINEDEBUG=+relay podesavanja okruženja WINE programa.
+I u jednom i u drugom slučaju imamo jedan read-only base subvolume sa čistom slikom sistema. Prilikom pokretanja kontejnera pravi se kopija (btrfs snapshot) tog base subvolume-a čiji je životni vek koliko i trajanje aktivnosti kontejnera, i kontejner se pokreće u njoj. To omogućava da aktivnosti jednog testiranog programa ne utiču na drugi, i to bez značajnih uticaja na performanse zbog Copy-on-Write sposobnosti korišćenog fajl sistema.
+[Image: Sandbox tools]
+
+Kada dobijemo izdvojene log fajlove programa, oni se moraju detaljno parsirati pre daljeg procesiranja. U ovom radu korišćen je ručno napravljen parser koji iz log-a izbacuje: sintaksičke karaktere, brojne konstante, binarne blob-ove, određene strace poruke i druge slične stvari, beznačajne za analizu. Sastoji se iz filtera za karaktere (koji ne propušta samo određene karaktere, gde god da se nađu) i filtera za sintagme (koji ne propušta cele reči/grupe reči kada se nađu u tekstu).
+Drugi deo parsiranja je tokenizacija. Da bi neuralna mreža mogla da primi sadržaj syscall log-a, on se mora razdvojiti u pojedinačne tokene kojima će kasnije biti dodeljena vektorska vrednost. U ovom radu, kao tokeni su korišćene pojedinačne reči, tj. sistemski pozivi i njihovi argumenti koji ostanu nakon filtriranja.
+Parser vrši tokenizaciju, s tim što ako naiđe na token koji predstavlja putanju do nekog fajla na disku, taj token zamenjuje SELinux kontekstom tog fajla. Na taj način koristimo već gotovu kategorizaciju fajlova po tipovima koja je urađena za potrebe SELinux polise. Za Windows fajlove, ručno su dodeljeni tipovi user_t za fajlove u korisničkom direktorijumu, system_t za fajlove u C:\\Windows\, program_t za fajlove u C:\\Program Files*\, root_t za ostale fajlove na C disku i data_t za fajlove na drugim particijama.

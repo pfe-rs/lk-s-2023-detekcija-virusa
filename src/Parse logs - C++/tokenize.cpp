@@ -205,6 +205,11 @@ static vector<vector<string>> tokenize_program(string filepath)
 
 			if (token[0] == '/')
 				token = get_selinux_type(token);
+
+			// If a binary blob slipped in anyway, cut it off
+			// Very large strings are very likely binary blobs (tested on FastText visualization)
+			if (token.size() > 25)
+				continue;
 			tokenized_line.push_back(token);
 			
 			// Skip the actual data from certain syscalls

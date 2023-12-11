@@ -62,6 +62,8 @@ extern "C" void connect_sock()
 
 extern "C" char *read_next()
 {
+	line_break = 0;
+	program_break = 0;
 	size_t ret = check( recvmsg, fdsock, &msg, 0 );
 	if (ret == 0)
 		return empty_string;

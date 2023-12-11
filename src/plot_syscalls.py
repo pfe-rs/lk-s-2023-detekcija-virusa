@@ -133,12 +133,12 @@ def read_strace_log(dirpath:str):
 ###############################################################################
 
 ### Generate histograms from raw data and save data needed by both histograms and heatmaps ###
-strace_output = read_strace_log("malware_logs_filtered")
+strace_output = read_strace_log("/home/marko/malware_logs_filtered")
 strace_output = filter_log(strace_output)
 strace_output = parse_strace_output(strace_output)
 syscall_names = generate_syscall_set(strace_output)
 
-strace_output_b = read_strace_log("benign_logs")
+strace_output_b = read_strace_log("/home/marko/benign_logs")
 strace_output_b = filter_log(strace_output_b)
 strace_output_b = parse_strace_output(strace_output_b)
 syscall_names_b = generate_syscall_set(strace_output_b)
@@ -172,20 +172,20 @@ term_frequency_b = get_term_frequency(strace_output_b, term_frequency)
 
 
 ### Load previously saved data and generate histograms based on it ###
-with open("data.pkl", "rb") as f:
-	terms, _, matrix_graph, syscall_names = pickle.load(f)
-with open("data_benign.pkl", "rb") as f:
-	terms_b, _, matrix_graph_b, syscall_names_b = pickle.load(f)
+#with open("data.pkl", "rb") as f:
+#	terms, _, matrix_graph, syscall_names = pickle.load(f)
+#with open("data_benign.pkl", "rb") as f:
+#	terms_b, _, matrix_graph_b, syscall_names_b = pickle.load(f)
 
-term_frequency = {}
-term_frequency_b = {}
-for term in terms_b:
-	term_frequency_b[term] = 0
-for term in terms:
-	term_frequency[term] = 0
+#term_frequency = {}
+#term_frequency_b = {}
+#for term in terms_b:
+#	term_frequency_b[term] = 0
+#for term in terms:
+#	term_frequency[term] = 0
 
-term_frequency = get_term_frequency(strace_output, term_frequency)
-term_frequency_b = get_term_frequency(strace_output_b, term_frequency_b)
+#term_frequency = get_term_frequency(strace_output, term_frequency)
+#term_frequency_b = get_term_frequency(strace_output_b, term_frequency_b)
 
 #create_histogram(term_frequency_b)
 #create_histogram(term_frequency)
@@ -196,10 +196,10 @@ term_frequency_b = get_term_frequency(strace_output_b, term_frequency_b)
 #with open("data_benign.pkl", "rb") as f:
 #	terms_b, strace_output_b, matrix_graph_b, syscall_names_b = pickle.load(f)
 
-#mask = matrix_graph > 5000
-#matrix_graph[mask] = 5000
-#mask = matrix_graph_b > 5000
-#matrix_graph_b[mask] = 5000
+mask = matrix_graph > 5000
+matrix_graph[mask] = 5000
+mask = matrix_graph_b > 5000
+matrix_graph_b[mask] = 5000
 
 create_heatmap(matrix_graph, syscall_names)
 create_heatmap(matrix_graph_b, syscall_names_b)
